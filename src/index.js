@@ -6,36 +6,29 @@ const { addMethods } = require('./methods')
 const { getOperations } = require('./operations')
 
 class NetlifyAPI {
-  constructor(accessToken, opts) {
+  constructor(firstArg, secondArg) {
     addMethods(this)
 
     // variadic arguments
-    if (typeof accessToken === 'object') {
-      opts = accessToken
-      accessToken = null
-    }
-    // default opts
-    opts = {
-      userAgent: 'netlify/js-client',
-      scheme: dfn.schemes[0],
-      host: dfn.host,
-      pathPrefix: dfn.basePath,
-      accessToken,
-      globalParams: {},
-      ...opts,
-    }
+    const [accessTokenInput, opts = {}] = typeof firstArg === 'object' ? [null, firstArg] : [firstArg, secondArg]
 
-    this.defaultHeaders = {
-      'User-agent': opts.userAgent,
+    // default opts
+    const {
+      userAgent = 'netlify/js-client',
+      scheme = dfn.schemes[0],
+      host = dfn.host,
+      pathPrefix = dfn.basePath,
+      accessToken = accessTokenInput,
+      globalParams = {},
+      agent,
+    } = opts
+
+    const defaultHeaders = {
+      'User-agent': userAgent,
       accept: 'application/json',
     }
 
-    this.scheme = opts.scheme
-    this.host = opts.host
-    this.pathPrefix = opts.pathPrefix
-    this.globalParams = opts.globalParams
-    this.accessToken = opts.accessToken
-    this.agent = opts.agent
+    Object.assign(this, { defaultHeaders, scheme, host, pathPrefix, globalParams, accessToken, agent })
   }
 
   get accessToken() {
@@ -63,9 +56,7 @@ class NetlifyAPI {
     return `${this.scheme}://${this.host}${this.pathPrefix}`
   }
 
-  async getAccessToken(ticket, opts) {
-    opts = { poll: 1000, timeout: 3.6e6, ...opts }
-
+  async getAccessToken(ticket, { poll = 1000, timeout = 3.6e6 } = {}) {
     const { id } = ticket
 
     // ticket capture
@@ -79,8 +70,8 @@ class NetlifyAPI {
     }
 
     await pWaitFor(checkTicket, {
-      interval: opts.poll,
-      timeout: opts.timeout,
+      interval: poll,
+      timeout,
       message: 'Timeout while waiting for ticket grant',
     })
 

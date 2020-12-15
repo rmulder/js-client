@@ -8,6 +8,8 @@ const { defaultFilter } = require('./util')
 test('hashes files in a folder', async (t) => {
   const { files, filesShaMap } = await hashFiles(__dirname, path.resolve(__dirname, '../../fixtures/netlify.toml'), {
     filter: defaultFilter,
+    statusCb() {},
+    concurrentHash: 100,
   })
   t.truthy(files['netlify.toml'], 'includes the netlify.toml file')
   Object.keys(files).forEach((filePath) => {

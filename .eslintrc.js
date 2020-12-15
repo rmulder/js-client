@@ -9,7 +9,6 @@ module.exports = {
     'max-statements': 0,
     'no-await-in-loop': 0,
     'no-magic-numbers': 0,
-    'no-param-reassign': 0,
     'fp/no-class': 0,
     'fp/no-let': 0,
     'fp/no-loops': 0,

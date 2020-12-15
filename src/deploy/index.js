@@ -10,26 +10,29 @@ const uploadFiles = require('./upload_files')
 const { waitForDiff } = require('./util')
 const { waitForDeploy, getUploadList, defaultFilter } = require('./util')
 
-const deploySite = async (api, siteId, dir, opts) => {
-  opts = {
-    fnDir: null,
-    configPath: null,
-    draft: false,
+const deploySite = async (
+  api,
+  siteId,
+  dir,
+  {
+    fnDir = null,
+    configPath = null,
+    draft = false,
     // API calls this the 'title'
-    message: undefined,
-    tmpDir: tempy.directory(),
+    message: title,
+    tmpDir = tempy.directory(),
     // local deploy timeout: 20 mins
-    deployTimeout: 1.2e6,
+    deployTimeout = 1.2e6,
     // concurrent file hash calls
-    concurrentHash: 100,
+    concurrentHash = 100,
     // Number of concurrent uploads
-    concurrentUpload: 5,
-    filter: defaultFilter,
+    concurrentUpload = 5,
+    filter = defaultFilter,
     // number of files
-    syncFileLimit: 100,
+    syncFileLimit = 100,
     // number of times to retry an upload
-    maxRetry: 5,
-    statusCb: () => {
+    maxRetry = 5,
+    statusCb = () => {
       /* default to noop */
       // statusObj: {
       //     type: name-of-step
@@ -38,13 +41,12 @@ const deploySite = async (api, siteId, dir, opts) => {
       //     spinner: a spinner from cli-spinners package
       // }
     },
-    // allows updating an existing deploy
-    deployId: null,
-    ...opts,
-  }
-
-  const { fnDir, configPath, statusCb, message: title } = opts
-
+    deployId: deployIdOpt = null,
+    hashAlgorithm,
+    assetType,
+    branch,
+  } = {},
+) => {
   statusCb({
     type: 'hashing',
     msg: `Hashing files...`,
@@ -52,8 +54,8 @@ const deploySite = async (api, siteId, dir, opts) => {
   })
 
   const [{ files, filesShaMap }, { functions, fnShaMap }] = await Promise.all([
-    hashFiles(dir, configPath, opts),
-    hashFns(fnDir, opts),
+    hashFiles(dir, configPath, { concurrentHash, hashAlgorithm, assetType, statusCb, filter }),
+    hashFns(fnDir, { tmpDir, concurrentHash, hashAlgorithm, statusCb, assetType }),
   ])
 
   const filesCount = Object.keys(files).length
@@ -81,22 +83,22 @@ const deploySite = async (api, siteId, dir, opts) => {
     body: {
       files,
       functions,
-      async: Object.keys(files).length > opts.syncFileLimit,
-      branch: opts.branch,
-      draft: opts.draft,
+      async: Object.keys(files).length > syncFileLimit,
+      branch,
+      draft,
     },
   })
-  if (opts.deployId === null) {
+  if (deployIdOpt === null) {
     if (title) {
       deployParams = { ...deployParams, title }
     }
     deploy = await api.createSiteDeploy(deployParams)
   } else {
-    deployParams = { ...deployParams, deploy_id: opts.deployId }
+    deployParams = { ...deployParams, deploy_id: deployIdOpt }
     deploy = await api.updateSiteDeploy(deployParams)
   }
 
-  if (deployParams.body.async) deploy = await waitForDiff(api, deploy.id, siteId, opts.deployTimeout)
+  if (deployParams.body.async) deploy = await waitForDiff(api, deploy.id, siteId, deployTimeout)
 
   const { id: deployId, required: requiredFiles, required_functions: requiredFns } = deploy
 
@@ -110,22 +112,22 @@ const deploySite = async (api, siteId, dir, opts) => {
 
   const uploadList = getUploadList(requiredFiles, filesShaMap).concat(getUploadList(requiredFns, fnShaMap))
 
-  await uploadFiles(api, deployId, uploadList, opts)
+  await uploadFiles(api, deployId, uploadList, { concurrentUpload, statusCb, maxRetry })
 
   statusCb({
     type: 'wait-for-deploy',
     msg: 'Waiting for deploy to go live...',
     phase: 'start',
   })
-  deploy = await waitForDeploy(api, deployId, siteId, opts.deployTimeout)
+  deploy = await waitForDeploy(api, deployId, siteId, deployTimeout)
 
   statusCb({
     type: 'wait-for-deploy',
-    msg: opts.draft ? 'Draft deploy is live!' : 'Deploy is live!',
+    msg: draft ? 'Draft deploy is live!' : 'Deploy is live!',
     phase: 'stop',
   })
 
-  await rimraf(opts.tmpDir)
+  await rimraf(tmpDir)
 
   const deployManifest = {
     deployId,
